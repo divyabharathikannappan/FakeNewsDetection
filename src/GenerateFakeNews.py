@@ -135,7 +135,7 @@ Model = AutoModelForCausalLM.from_pretrained(
 ).to("cuda")
 #Generates however many random fake articles randomly selecting from list of indeitifed people and topics for the prompt.
 #And saves the generated fake news article to the train/FakeNewsArticlesArtificiallyGeneratedTraining
-for i in range(100,4000):
+for i in range(120,4000):
     #Randomly selecting 2-5 people from the set of people identified in the fake news using NER
     NumPeople = random.randint(2,5)
     SelectedPeople = random.sample(list(NamedPeople),NumPeople)
@@ -144,6 +144,7 @@ for i in range(100,4000):
 
     #Generating fake news!
     #Prompt is passed to LLAMA 3 telling it/guiding it how to write the fake news article.
+    #I kept changing number of words 
     RandomPrompt = f"""
     You are a news article generator. 
 
@@ -155,7 +156,7 @@ for i in range(100,4000):
 
     Avoid repeats.
 
-    Make it about 400 words.
+    Make it between 300-600 words.
 
     Requirement: Only write the article, don't write anything else in your output.
     """
@@ -169,7 +170,7 @@ for i in range(100,4000):
             temperature=0.8,
             top_p=0.9,
             do_sample=True,
-            num_return_sequences=5 #So once the context prompt has been loaded to LLAMA, there is little difference time wise between generating
+            num_return_sequences=3 #So once the context prompt has been loaded to LLAMA, there is little difference time wise between generating
             #Just 1 article or many. However changing contexts takes the bulk of the time. To PAD the number generated articles I have 10 be made that are all similar.
             ) #This does mean that they depreciate in training quality.
     
