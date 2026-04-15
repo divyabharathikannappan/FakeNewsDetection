@@ -4,7 +4,7 @@
 #These generated fake news articles are used to augment the fake news portion of the training dataset so that there is a
 #closer amount of them to the number of real news articles so that the classification model for real or fake news is more accurate.
 #LDA is ran on the entire training set of real fake news articles, to extract topics
-#Next spaCy is used to identify names and people, it was an available and very reliable library that can do that
+#Next spaCy is used to identify names and people, it was an available and very reliable model that can do that
 #Finally the topics + people are randomly selected in combinations and given to LLAMA 3 as prompt 
 #to have it generate a news article about them. Obviously, its fake. Lab 11 was used as the inspiration for how to implement the LDA.
 #All fake news articles are saved to the Data/FakeNewsArticlesArtificiallyGeneratedTrainingSet folder.
@@ -21,7 +21,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
 import random
 
-#First loading the fake news articles and setting output destination where the generated fake articles will be saved to
+#First loading the real fake news articles and setting output destination where the generated fake articles will be saved to
 InputFolder = "DS8008FinalProject/Data/train/FakeNewsArticlesTrainingSet/"
 OutputFolder = "DS8008FinalProject/Data/train/FakeNewsArticlesArtificiallyGeneratedTrainingSet/"
 
@@ -131,12 +131,11 @@ Tokenizer = AutoTokenizer.from_pretrained(ModelName)
 #Defining llama 3
 Model = AutoModelForCausalLM.from_pretrained(
     ModelName,
-    device_map="auto",
     torch_dtype=torch.float16
-)
+).to("cuda")
 #Generates however many random fake articles randomly selecting from list of indeitifed people and topics for the prompt.
 #And saves the generated fake news article to the train/FakeNewsArticlesArtificiallyGeneratedTraining
-for i in range(44,4000):
+for i in range(81,4000):
     #Randomly selecting 2-5 people from the set of people identified in the fake news using NER
     NumPeople = random.randint(2,5)
     SelectedPeople = random.sample(list(NamedPeople),NumPeople)
@@ -144,43 +143,52 @@ for i in range(44,4000):
     RandomTopic = random.choice(DocumentTopics)
 
     #Generating fake news!
+    #Prompt is passed to LLAMA 3 telling it/guiding it how to write the fake news article.
     RandomPrompt = f"""
     You are a news article generator. 
 
-    Write an article given the following people:
+    Involving the following people:
     {SelectedPeople}
 
-    And make up a logical story or argument or drama or event involving the listed people and these topic words:
+    And make up a logical story involving the listed people and these topic words:
     {RandomTopic}
 
-
-    Write 3-5 Paragraphs using the topic words and the people in a logical manner. Try to avoid repeats.
-    You may choose to make it in gossip news style or make it more formal rumours. Or a formal event that you are reporting on.
-    It may also be an anouncement or just news.
+    Avoid repeats.
 
     Make it about 400 words.
-
-    Commit to the chosen style.
 
     Requirement: Only write the article, don't write anything else in your output.
     """
 
     #Final step is to generate the text by inputting the prompt into LLAMA 3
-    ModelInput = Tokenizer(RandomPrompt,return_tensors="pt").to(Model.device)
-    Output = Model.generate(
-        **ModelInput,
-        max_new_tokens=400,
-        temperature=0.8,
-        top_p=0.9,
-        do_sample=True
-        )
-    CompletelyFakeArticle = Tokenizer.decode(Output[0],skip_special_tokens=True)
-    CompletelyFakeArticle = CompletelyFakeArticle[len(RandomPrompt):].strip() #Removing prompt from start of generated article.
+    ModelInput = Tokenizer(RandomPrompt,return_tensors="pt").to("cuda")
+    with torch.inference_mode():
+        Output = Model.generate(
+            **ModelInput,
+            max_new_tokens=500, #Setting this to something like 1200 is possible for maximum quality but, it trained 42 overnight in like 10 hours just not feasible.
+            temperature=0.8,
+            top_p=0.9,
+            do_sample=True,
+            num_return_sequences=10 #So once the context prompt has been loaded to LLAMA, there is little difference time wise between generating
+            #Just 1 article or many. However changing contexts takes the bulk of the time. To PAD the number generated articles I have 10 be made that are all similar.
+            ) #This does mean that they depreciate in training quality.
     
-    FilePath = os.path.join(OutputFolder,f"FakeNewsArticleGenerated{i}.txt")
+    #Extracting the 10 similarily generated fake news articles by LLAMA 3 and spliting them up
+    CompletelyFakeArticles = []
+    for output in Output:
+        text = Tokenizer.decode(output, skip_special_tokens=True)
+        text = text[len(RandomPrompt):].strip()
+        CompletelyFakeArticles.append(text)       
+    
+    #Saving each one to an indivudal text file.
+    for j, article in enumerate(CompletelyFakeArticles):
+        FilePath = os.path.join(
+            OutputFolder,
+            f"FakeNewsArticleGenerated_{i}_{j}.txt"
+        )
 
-    with open(FilePath,"a",encoding="utf-8") as f:
-        f.write(CompletelyFakeArticle)
+        with open(FilePath, "w", encoding="utf-8") as f:
+            f.write(article)
 
 
 
