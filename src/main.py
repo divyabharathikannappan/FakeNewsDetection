@@ -1,17 +1,37 @@
 from TrainAndEvaluateClassifier import TrainAndEvaluateClassifer
 from TrainAndEvaluateLSTM import TrainAndEvaluateLSTM
+from ReinforcementLearning import train_q_learning
 
-print("Loading dataset...")
 
-# Step 1: Get training data
-data = TrainAndEvaluateClassifer(
-    NumberOfArtificialArticlesTouse=50,
-    UseAll=1
-)
+def run_single_experiment():
+    print("=== Running Single Model (Baseline) ===")
 
-print("Training LSTM...")
+    data = TrainAndEvaluateClassifer(
+        NumberOfArtificialArticlesTouse=50,
+        UseAll=1
+    )
 
-# Step 2: Train + evaluate
-accuracy = TrainAndEvaluateLSTM(data)
+    accuracy = TrainAndEvaluateLSTM(data)
 
-print("Final Accuracy:", accuracy)
+    print(f"\nBaseline Accuracy (50 synthetic): {accuracy:.4f}")
+
+
+def run_rl_optimization():
+    print("\n=== Running Q-Learning Optimization ===")
+
+    best = train_q_learning()
+
+    print(f"\nOptimal number of synthetic articles: {best}")
+
+
+if __name__ == "__main__":
+    
+    print("Starting Project...\n")
+
+    # Baseline run
+    run_single_experiment()
+
+    # RL optimization
+    run_rl_optimization()
+
+    print("\n=== Done ===")

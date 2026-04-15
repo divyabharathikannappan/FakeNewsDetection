@@ -1,3 +1,4 @@
+#divya bharathi
 def TrainAndEvaluateLSTM(AllArticles, epochs=5):
     import torch
     import torch.nn as nn
