@@ -1,97 +1,89 @@
-#Alex Eliseev
-#This Python script runs binary classification of fake/real news. The main function is called upon by the main
-#jupyter notebook file for Q-learning and also for general model training/evaluation. It is told how many artificially generated
-#fake news articles it should use to augment the fake news portion of the training dataset. The actual fake news and real news it simply pulls
-#from the training dataset folders. It trains then evaluates the classifier on the test set of fake/real news that was set aside.
-#The classifier is a BERT transformer model from one of the labs, it is quite good for this task. Labeling is done as the articles are loaded from their folders.
-#Lastly it has an option to use all or a smaller training set. Generating fake articles took a lot of time and we did not make that many.
-#To make their impact more apperent a smaller dataset could be used with a custom number of real fakes/real articles.
-def TrainAndEvaluateClassifer(NumberOfArtificialArticlesTouse,UseAll,NumberOfRealFakeArticles=400,NumberOfRealArticles=800):
-    #imports
-    import os
-    import random
+# Alex Eliseev
+# Data loading helpers for fake-news classification experiments.
 
-    #Array will hold all of the labeled fake, generated fake and real articles.
-    AllArticles = [] 
+from __future__ import annotations
 
-    #First loading all of the real articles.
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # src/
-    PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))  # project/
-    RealArticlesFilePath = os.path.join(
-        PROJECT_ROOT,
+import os
+import random
+from typing import List, Sequence, Tuple
+
+Article = Tuple[str, int]
+
+
+def _read_articles(folder_path: str, label: int, limit: int | None = None) -> List[Article]:
+    articles = os.listdir(folder_path)
+    random.shuffle(articles)
+    if limit is not None:
+        articles = articles[:limit]
+
+    loaded: List[Article] = []
+    for article in articles:
+        file_path = os.path.join(folder_path, article)
+        with open(file_path, "r", encoding="utf-8", errors="ignore") as handle:
+            text = handle.read().replace("<br />", " ").replace("<br>", " ")
+            loaded.append((text, label))
+    return loaded
+
+
+def _training_dirs() -> Tuple[str, str, str]:
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.abspath(os.path.join(base_dir, ".."))
+
+    real_path = os.path.join(project_root, "Data", "train", "RealNewsArticlesTrainingSet")
+    fake_path = os.path.join(project_root, "Data", "train", "FakeNewsArticlesTrainingSet")
+    generated_path = os.path.join(
+        project_root,
         "Data",
         "train",
-        "RealNewsArticlesTrainingSet"
+        "FakeNewsArticlesArtificiallyGeneratedTrainingSet",
     )
-    RealArticles = os.listdir(RealArticlesFilePath)
-    random.shuffle(RealArticles)
+    return real_path, fake_path, generated_path
 
-    if(UseAll == 0): #If this option enabled, using only limited number of real articles. 
-        RealArticles = RealArticles[:NumberOfRealArticles]
-    
-    for Article in RealArticles:
-        FilePath = os.path.join(RealArticlesFilePath,Article)
-        
-        #Opening article from the training folder real news articles, cleaning it slightly and saving it to array with label 0 for real
-        with open(FilePath,"r",encoding="utf-8",errors="ignore") as File:
-            Text = File.read()
-            Text = Text.replace("<br />"," ").replace("<br>"," ")
-            AllArticles.append((Text,0)) #Appending with label 0 in 2nd column for real article.
 
-    #Repeating same process, loading all of the real fake articles from their folder into the training array now
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # src/
-    PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))  # project/
-    FakeArticlesFilePath = os.path.join(
-        PROJECT_ROOT,
-        "Data",
-        "train",
-        "FakeNewsArticlesTrainingSet"
+def LoadTrainingArticleGroups(
+    number_of_artificial_articles_to_use: int,
+    use_all: int,
+    number_of_real_fake_articles: int = 400,
+    number_of_real_articles: int = 800,
+) -> Tuple[List[Article], List[Article], List[Article]]:
+    """
+    Returns three independent groups:
+      - real_articles (label=0)
+      - original_fake_articles (label=1)
+      - generated_fake_articles (label=1)
+    """
+    random.seed(42)
+
+    real_path, fake_path, generated_path = _training_dirs()
+
+    real_limit = None if use_all else number_of_real_articles
+    fake_limit = None if use_all else number_of_real_fake_articles
+
+    real_articles = _read_articles(real_path, label=0, limit=real_limit)
+    fake_articles = _read_articles(fake_path, label=1, limit=fake_limit)
+    generated_fake_articles = _read_articles(
+        generated_path,
+        label=1,
+        limit=number_of_artificial_articles_to_use,
     )
-    FakeArticles = os.listdir(FakeArticlesFilePath)
-    random.shuffle(FakeArticles)
 
-    if(UseAll == 0): #If this option enabled, using only 400 fake articles. 
-        FakeArticles = FakeArticles[:NumberOfRealFakeArticles]
-    
-    for Article in FakeArticles:
-        FilePath = os.path.join(FakeArticlesFilePath,Article)
-        
-        #Opening article from the training folder real news articles, cleaning it slightly and saving it to array with label 0 for real
-        with open(FilePath,"r",encoding="utf-8",errors="ignore") as File:
-            Text = File.read()
-            Text = Text.replace("<br />"," ").replace("<br>"," ")
-            AllArticles.append((Text,1)) #Appending with label 1 for fake article.
-    
-    #Lastly repeating same process but loading specified amount of artificially generated articles from their folder into the trainign array.
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # src/
-    PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))  # project/
-    GeneratedFakeArticlesFilePath = os.path.join(
-        PROJECT_ROOT,
-        "Data",
-        "train",
-        "FakeNewsArticlesArtificiallyGeneratedTrainingSet"
+    return real_articles, fake_articles, generated_fake_articles
+
+
+def TrainAndEvaluateClassifer(
+    NumberOfArtificialArticlesTouse: int,
+    UseAll: int,
+    NumberOfRealFakeArticles: int = 400,
+    NumberOfRealArticles: int = 800,
+) -> List[Article]:
+    """
+    Backwards-compatible loader used by existing scripts.
+    Returns a single combined list of (text, label) tuples.
+    """
+    real_articles, fake_articles, generated_fake_articles = LoadTrainingArticleGroups(
+        number_of_artificial_articles_to_use=NumberOfArtificialArticlesTouse,
+        use_all=UseAll,
+        number_of_real_fake_articles=NumberOfRealFakeArticles,
+        number_of_real_articles=NumberOfRealArticles,
     )
-    GeneratedFakeArticles = os.listdir(GeneratedFakeArticlesFilePath)
-    random.shuffle(GeneratedFakeArticles)
-
-    #Using only specified amount or all if amount exceeds available
-    GeneratedFakeArticles = GeneratedFakeArticles[:NumberOfArtificialArticlesTouse]
-    
-    for Article in GeneratedFakeArticles:
-        FilePath = os.path.join(GeneratedFakeArticlesFilePath,Article)
-        
-        #Opening article from the training folder real news articles, cleaning it slightly and saving it to array with label 0 for real
-        with open(FilePath,"r",encoding="utf-8",errors="ignore") as File:
-            Text = File.read()
-            Text = Text.replace("<br />"," ").replace("<br>"," ")
-            AllArticles.append((Text,1)) #Appending with label 1 for fake article.
-
-    return AllArticles
-
-
-
-     
-
-
-
-
+    return real_articles + fake_articles + generated_fake_articles
